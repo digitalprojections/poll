@@ -6,28 +6,47 @@
  */
 
 import WebApp from '@twa-dev/sdk';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { getAuth, signInWithCustomToken } from 'firebase/auth';
 
 /**
  * Service to interact with the Telegram Web App SDK.
  */
 export const telegramService = {
   /**
+   * Returns true when running inside Telegram (initData is present).
+   */
+  isTelegram(): boolean {
+    return Boolean(WebApp.initData && WebApp.initData.length > 0);
+  },
+
+  /**
    * Initializes the Web App and sets up basic UI.
    */
   init() {
     WebApp.ready();
     WebApp.expand();
-    
-    // Set theme colors
-    const color = WebApp.themeParams.bg_color || '#ffffff';
-    document.body.style.backgroundColor = color;
   },
 
   /**
-   * Gets the current user from Telegram.
+   * Gets the current user from Telegram (unverified, UI-only).
    */
   getUser() {
     return WebApp.initDataUnsafe.user;
+  },
+
+  /**
+   * Verifies Telegram identity via Cloud Function and signs into Firebase.
+   * Must be called when isTelegram() is true.
+   */
+  async signInWithTelegram(): Promise<void> {
+    const functions = getFunctions();
+    const telegramAuth = httpsCallable<{ initData: string }, { token: string }>(
+      functions,
+      'telegramAuth'
+    );
+    const result = await telegramAuth({ initData: WebApp.initData });
+    await signInWithCustomToken(getAuth(), result.data.token);
   },
 
   /**
@@ -71,7 +90,7 @@ export const telegramService = {
   /**
    * Sends data back to the bot.
    */
-  sendData(data: any) {
+  sendData(data: unknown) {
     WebApp.sendData(JSON.stringify(data));
   },
 

@@ -1,116 +1,18 @@
-rules_version = '2';
+rules_version='2'
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // ===============================================================
-    // Assumed Data Model
-    // ===============================================================
-    //
-    // Collection: users
-    // Document ID: userId (UID)
-    // Fields:
-    //   - uid: string (required)
-    //   - displayName: string
-    //   - email: string
-    //   - photoURL: string
-    //   - telegramId: string
-    //   - createdAt: number (required)
-    //
-    // Collection: polls
-    // Document ID: pollId
-    // Fields:
-    //   - question: string (required)
-    //   - description: string
-    //   - creatorId: string (required)
-    //   - creatorName: string
-    //   - createdAt: number (required)
-    //   - isActive: bool (required)
-    //   - customProperties: list (required)
-    //   - options: list (required)
-    //
-    // Collection: polls/{pollId}/votes
-    // Document ID: voteId (usually userId)
-    // Fields:
-    //   - pollId: string (required)
-    //   - userId: string (required)
-    //   - userName: string
-    //   - optionId: string (required)
-    //   - timestamp: number (required)
-    //
-    // ===============================================================
-
-    // ===============================================================
-    // Helper Functions
-    // ===============================================================
-    
-    function isAuthenticated() {
-      return request.auth != null;
-    }
-
-    function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
-    }
-
-    function isDocOwner() {
-      return isAuthenticated() && request.auth.uid == resource.data.creatorId;
-    }
-
-    function isValidEmail(email) {
-      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
-    }
-
-    function isValidUser(data) {
-      return data.keys().hasAll(['uid', 'createdAt']) &&
-             data.uid == request.auth.uid &&
-             data.createdAt is number;
-    }
-
-    function isValidPoll(data) {
-      return data.keys().hasAll(['question', 'creatorId', 'createdAt', 'isActive', 'customProperties', 'options']) &&
-             data.question is string && data.question.size() > 0 && data.question.size() < 500 &&
-             data.creatorId == request.auth.uid &&
-             data.createdAt is number &&
-             data.isActive is bool &&
-             data.customProperties is list &&
-             data.options is list;
-    }
-
-    function isValidVote(data, pollId) {
-      return data.keys().hasAll(['pollId', 'userId', 'optionId', 'timestamp']) &&
-             data.pollId == pollId &&
-             data.userId == request.auth.uid &&
-             data.optionId is string &&
-             data.timestamp is number;
-    }
-
-    function isAdmin() {
-      return isAuthenticated() &&
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-          (request.auth.token.email == "ahmadjangroup@gmail.com" && request.auth.token.email_verified == true));
-    }
-
-    // ===============================================================
-    // Match Rules
-    // ===============================================================
-
-    match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow create: if isOwner(userId) && isValidUser(request.resource.data);
-      allow update: if isOwner(userId) && isValidUser(request.resource.data) || isAdmin();
-    }
-
-    match /polls/{pollId} {
-      allow read: if true; // Polls are public
-      allow create: if isAuthenticated() && isValidPoll(request.resource.data);
-      allow update: if (isDocOwner() && isValidPoll(request.resource.data)) || isAdmin();
-      allow delete: if isDocOwner() || isAdmin();
-
-      match /votes/{voteId} {
-        allow read: if true; // Votes are public for summary
-        allow create: if isAuthenticated() && isValidVote(request.resource.data, pollId) && voteId == request.auth.uid;
-        allow update: if false; // Votes cannot be changed
-        allow delete: if isOwner(voteId) || isAdmin();
-      }
+    match /{document=**} {
+      // This rule allows anyone with your database reference to view, edit,
+      // and delete all data in your database. It is useful for getting
+      // started, but it is configured to expire after 30 days because it
+      // leaves your app open to attackers. At that time, all client
+      // requests to your database will be denied.
+      //
+      // Make sure to write security rules for your app before that time, or
+      // else all client requests to your database will be denied until you
+      // update your rules.
+      allow read, write: if request.time < timestamp.date(2026, 5, 15);
     }
   }
 }

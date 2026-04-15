@@ -31,7 +31,7 @@ function Navigation() {
         </div>
         <span className="font-serif italic text-xl tracking-tight text-text-primary">Poll Architect</span>
       </div>
-      
+
       <nav className="flex-1">
         <ul className="space-y-4">
           <li>
@@ -62,7 +62,7 @@ function Navigation() {
             <p className="text-xs font-medium text-text-primary truncate">{user.displayName}</p>
             <p className="text-[10px] text-text-secondary truncate">Admin Mode</p>
           </div>
-          <button 
+          <button
             onClick={() => auth.signOut()}
             className="text-text-secondary hover:text-red-500 transition-colors"
           >
@@ -74,19 +74,49 @@ function Navigation() {
   );
 }
 
+function BottomNav() {
+  const { user } = usePolls();
+  if (!user) return null;
+  return (
+    <nav className="fixed bottom-0 left-0 right-0 bg-surface border-t border-border flex items-center justify-around px-4 py-3 md:hidden z-50">
+      <Link to="/" className="flex flex-col items-center gap-1 text-text-secondary hover:text-accent transition-colors">
+        <BarChart3 className="w-5 h-5" />
+        <span className="text-[10px] uppercase tracking-wider">Polls</span>
+      </Link>
+      <Link to="/create" className="flex flex-col items-center gap-1 text-text-secondary hover:text-accent transition-colors">
+        <Plus className="w-5 h-5" />
+        <span className="text-[10px] uppercase tracking-wider">New</span>
+      </Link>
+      <button
+        onClick={() => auth.signOut()}
+        className="flex flex-col items-center gap-1 text-text-secondary hover:text-red-500 transition-colors"
+      >
+        <LogOut className="w-5 h-5" />
+        <span className="text-[10px] uppercase tracking-wider">Logout</span>
+      </button>
+    </nav>
+  );
+}
+
 function AppContent() {
-  const { user, loading } = usePolls();
+  const { user, loading, isTgSigningIn } = usePolls();
 
-  useEffect(() => {
-    telegramService.init();
-  }, []);
-
-  if (loading) {
+  if (loading || isTgSigningIn) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-bg">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-bg gap-6">
         <div className="animate-pulse flex flex-col items-center gap-4">
-          <div className="w-12 h-12 bg-accent/20 rounded-full" />
-          <div className="h-4 w-32 bg-border rounded" />
+          <div className="w-16 h-16 bg-accent/20 rounded-2xl flex items-center justify-center">
+            <BarChart3 className="w-8 h-8 text-accent mr-0" />
+          </div>
+          <div className="h-4 w-48 bg-border rounded" />
+        </div>
+        <div className="text-center">
+          <p className="text-text-primary font-serif italic text-lg mb-1">
+            {isTgSigningIn ? 'Authenticating with Telegram...' : 'Loading Architect...'}
+          </p>
+          <p className="text-text-secondary text-[10px] uppercase tracking-widest">
+            {isTgSigningIn ? 'Verifying Identity' : 'Initializing Suite'}
+          </p>
         </div>
       </div>
     );
@@ -94,8 +124,16 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-bg flex">
-      <Navigation />
-      <main className={cn("flex-1 p-12", user ? "ml-[260px]" : "ml-0")}>
+      {/* Desktop sidebar — hidden on mobile */}
+      <div className="hidden md:block">
+        <Navigation />
+      </div>
+
+      {/* Main content — edge-to-edge on mobile */}
+      <main className={cn(
+        "flex-1 w-full px-4 py-6 md:p-12",
+        user ? "md:ml-[260px] pb-24 md:pb-12" : ""
+      )}>
         <Routes>
           <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
           <Route path="/" element={user ? <PollList /> : <Navigate to="/login" />} />
@@ -105,11 +143,14 @@ function AppContent() {
         </Routes>
 
         {/* Footer Credits */}
-        <footer className="mt-12 pt-8 border-t border-border text-text-secondary text-[11px] uppercase tracking-wider flex justify-between items-center">
+        <footer className="mt-12 pt-8 border-t border-border text-text-secondary text-[11px] uppercase tracking-wider flex flex-col md:flex-row gap-2 md:gap-0 justify-between items-center">
           <p>Built by @ahmadfuzal • {new Date().toLocaleDateString()}</p>
           <p>Telegram Mini App Integration Enabled</p>
         </footer>
       </main>
+
+      {/* Mobile bottom nav */}
+      <BottomNav />
     </div>
   );
 }

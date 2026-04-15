@@ -1,10 +1,10 @@
 {
-  "projectId": "big-genre-172004",
-  "appId": "1:926254455801:web:6e72c5dc6b62125ef37b28",
-  "apiKey": "AIzaSyC-wY-hPtDQ4ikIihoQwCVRIT7j_lbbncI",
-  "authDomain": "big-genre-172004.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-c02d138d-61ad-4e4c-a861-17d18a393241",
-  "storageBucket": "big-genre-172004.appspot.com",
-  "messagingSenderId": "926254455801",
+  "projectId": "poll-architect-app",
+  "appId": "1:1018535992012:web:337f849de24e118e888069",
+  "apiKey": "AIzaSyCwwYZAqM_sKaMWVFepp1D_BPp9lSk2NPg",
+  "authDomain": "poll-architect-app.firebaseapp.com",
+  "firestoreDatabaseId": "(default)",
+  "storageBucket": "poll-architect-app.firebasestorage.app",
+  "messagingSenderId": "1018535992012",
   "measurementId": ""
 }

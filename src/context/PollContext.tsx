@@ -20,12 +20,15 @@ import {
 } from 'firebase/firestore';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
-import { Poll, Vote, PollSummary } from '../types/poll';
 import { telegramService } from '../services/telegramService';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { signInWithCustomToken } from 'firebase/auth';
 
 interface PollContextType {
   user: FirebaseUser | null;
   loading: boolean;
+  isTgSigningIn: boolean;
+  authError: string | null;
   polls: Poll[];
   createPoll: (pollData: Omit<Poll, 'id' | 'creatorId' | 'creatorName' | 'createdAt' | 'isActive'>) => Promise<string>;
   castVote: (pollId: string, optionId: string) => Promise<void>;
@@ -37,14 +40,23 @@ const PollContext = createContext<PollContextType | undefined>(undefined);
 export function PollProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isTgSigningIn, setIsTgSigningIn] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [polls, setPolls] = useState<Poll[]>([]);
 
   useEffect(() => {
+    // 1. Initialize Telegram SDK immediately
+    telegramService.init();
+
+    // 2. Setup Firebase Auth listener
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
-      setLoading(false);
       
-      // If user is logged in, sync with Firestore
+      // We only stop the general 'loading' if we're not currently doing a Telegram sign-in
+      if (!isTgSigningIn) {
+        setLoading(false);
+      }
+      
       if (u) {
         const userRef = doc(db, 'users', u.uid);
         setDoc(userRef, {
@@ -57,6 +69,43 @@ export function PollProvider({ children }: { children: React.ReactNode }) {
         }, { merge: true }).catch(err => console.error('Error syncing user:', err));
       }
     });
+
+    // 3. Handle Auto-Login for Telegram
+    const handleTgAuth = async () => {
+      // @ts-ignore
+      const isTg = !!(window.Telegram?.WebApp?.initData);
+      
+      if (isTg && !auth.currentUser) {
+        console.log('PollProvider: Telegram detected, starting auto-login...');
+        setIsTgSigningIn(true);
+        setAuthError(null);
+        try {
+          const functions = getFunctions();
+          const tgAuth = httpsCallable<{ initData: string }, { token: string }>(functions, 'telegramAuth');
+          // @ts-ignore
+          const initData = window.Telegram?.WebApp?.initData || "";
+          
+          if (initData) {
+            const result = await tgAuth({ initData });
+            await signInWithCustomToken(auth, result.data.token);
+          } else {
+            setAuthError('Telegram InitData is empty. Are you running in a bot?');
+          }
+        } catch (err: any) {
+          console.error('PollProvider: Telegram auto-login failed:', err);
+          setAuthError(`Telegram Auth Failed: [${err.code}] ${err.message || 'Unknown Error'}`);
+        } finally {
+          setIsTgSigningIn(false);
+          setLoading(false);
+        }
+      } else {
+        if (!auth.currentUser) {
+          setTimeout(() => setLoading(false), 500);
+        }
+      }
+    };
+
+    handleTgAuth();
 
     return () => unsubscribe();
   }, []);
@@ -163,7 +212,7 @@ export function PollProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <PollContext.Provider value={{ user, loading, polls, createPoll, castVote, getPollSummary }}>
+    <PollContext.Provider value={{ user, loading, isTgSigningIn, authError, polls, createPoll, castVote, getPollSummary }}>
       {children}
     </PollContext.Provider>
   );
