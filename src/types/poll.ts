@@ -5,32 +5,40 @@
  * @date 2026-04-15
  */
 
-export interface CustomProperty {
-  name: string;
-  label: string;
-  unit?: string;
-}
+export type PollType = 'single-select' | 'multi-select';
+
 
 export interface PollOption {
   id: string;
   text: string;
   /**
-   * Custom integer values associated with this option.
-   * Key is the property name, value is the integer.
+   * Custom numeric metrics for this specific option.
    */
-  customValues: Record<string, number>;
+  properties: {
+    label: string;
+    value: number;
+    unit?: string;
+  }[];
+}
+
+export interface CustomProperty {
+  label: string;
+  value: number;
+  unit?: string;
+  name: string; // Internal key
 }
 
 export interface Poll {
   id: string;
   question: string;
+  type: PollType;
   description?: string;
   creatorId: string;
   creatorName: string;
   createdAt: number;
-  customProperties: CustomProperty[];
   options: PollOption[];
   isActive: boolean;
+  customProperties?: { label: string; unit?: string; name: string }[];
 }
 
 export interface Vote {
@@ -38,7 +46,7 @@ export interface Vote {
   pollId: string;
   userId: string;
   userName: string;
-  optionId: string;
+  selections: Record<string, Record<string, number>>;
   timestamp: number;
 }
 
@@ -50,4 +58,6 @@ export interface PollSummary {
     propertyTotals: Record<string, number>;
   }>;
   overallPropertyTotals: Record<string, number>;
+  votes: Vote[];
 }
+

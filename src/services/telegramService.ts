@@ -40,14 +40,27 @@ export const telegramService = {
    * Must be called when isTelegram() is true.
    */
   async signInWithTelegram(): Promise<void> {
-    const functions = getFunctions();
-    const telegramAuth = httpsCallable<{ initData: string }, { token: string }>(
-      functions,
-      'telegramAuth'
-    );
-    const result = await telegramAuth({ initData: WebApp.initData });
-    await signInWithCustomToken(getAuth(), result.data.token);
+    if (!this.isTelegram()) {
+      throw new Error('Not running inside Telegram');
+    }
+
+    try {
+      console.log('telegramService: Starting sign in...');
+      const functions = getFunctions(undefined, 'us-central1');
+      const telegramAuth = httpsCallable<{ initData: string }, { token: string }>(
+        functions,
+        'telegramAuth'
+      );
+      
+      const result = await telegramAuth({ initData: WebApp.initData });
+      console.log('telegramService: Function call successful, signing in with token');
+      await signInWithCustomToken(getAuth(), result.data.token);
+    } catch (error: any) {
+      console.error('telegramService: Sign in failed', error);
+      throw error;
+    }
   },
+
 
   /**
    * Shows a main button in the Telegram UI.

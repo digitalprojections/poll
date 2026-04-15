@@ -1,6 +1,7 @@
 {
   "projects": {
-    "staging": "big-genre-172004"
+    "default": "poll-architect-app",
+    "staging": "poll-architect-app"
   },
   "targets": {},
   "etags": {}

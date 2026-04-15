@@ -6,14 +6,14 @@
  */
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { 
-  collection, 
-  onSnapshot, 
-  query, 
-  orderBy, 
-  doc, 
-  setDoc, 
-  addDoc, 
+import {
+  collection,
+  onSnapshot,
+  query,
+  orderBy,
+  doc,
+  setDoc,
+  addDoc,
   serverTimestamp,
   where,
   getDocs
@@ -23,6 +23,7 @@ import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { telegramService } from '../services/telegramService';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { signInWithCustomToken } from 'firebase/auth';
+import { Poll, PollSummary, Vote } from '../types/poll';
 
 interface PollContextType {
   user: FirebaseUser | null;
@@ -31,7 +32,7 @@ interface PollContextType {
   authError: string | null;
   polls: Poll[];
   createPoll: (pollData: Omit<Poll, 'id' | 'creatorId' | 'creatorName' | 'createdAt' | 'isActive'>) => Promise<string>;
-  castVote: (pollId: string, optionId: string) => Promise<void>;
+  castVote: (pollId: string, selections: Vote['selections']) => Promise<void>;
   getPollSummary: (pollId: string) => Promise<PollSummary>;
 }
 
@@ -49,61 +50,76 @@ export function PollProvider({ children }: { children: React.ReactNode }) {
     telegramService.init();
 
     // 2. Setup Firebase Auth listener
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
+    const unsubscribe = onAuthStateChanged(auth, async (u) => {
       setUser(u);
-      
-      // We only stop the general 'loading' if we're not currently doing a Telegram sign-in
+
       if (!isTgSigningIn) {
         setLoading(false);
       }
-      
+
       if (u) {
+        const tgUser = telegramService.getUser();
+        const photoURL = tgUser?.photo_url || u.photoURL;
+        const displayName = u.displayName || (tgUser ? [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') : null);
+
+        // Sync with Firestore
         const userRef = doc(db, 'users', u.uid);
         setDoc(userRef, {
           uid: u.uid,
-          displayName: u.displayName,
+          displayName: displayName,
           email: u.email,
-          photoURL: u.photoURL,
-          telegramId: telegramService.getUser()?.id?.toString() || null,
+          photoURL: photoURL,
+          telegramId: tgUser?.id?.toString() || null,
+          username: tgUser?.username || null,
           updatedAt: Date.now()
         }, { merge: true }).catch(err => console.error('Error syncing user:', err));
+
+        // Update Auth profile if photo is missing or changed
+        if (photoURL && u.photoURL !== photoURL) {
+          import('firebase/auth').then(({ updateProfile }) => {
+            updateProfile(u, { photoURL }).catch(err => console.error('Error updating profile photo:', err));
+          });
+        }
       }
     });
 
-    // 3. Handle Auto-Login for Telegram
     const handleTgAuth = async () => {
-      // @ts-ignore
-      const isTg = !!(window.Telegram?.WebApp?.initData);
-      
-      if (isTg && !auth.currentUser) {
+      if (telegramService.isTelegram() && !auth.currentUser) {
         console.log('PollProvider: Telegram detected, starting auto-login...');
         setIsTgSigningIn(true);
         setAuthError(null);
         try {
-          const functions = getFunctions();
-          const tgAuth = httpsCallable<{ initData: string }, { token: string }>(functions, 'telegramAuth');
           // @ts-ignore
-          const initData = window.Telegram?.WebApp?.initData || "";
-          
-          if (initData) {
-            const result = await tgAuth({ initData });
-            await signInWithCustomToken(auth, result.data.token);
-          } else {
-            setAuthError('Telegram InitData is empty. Are you running in a bot?');
+          const initData = window.Telegram?.WebApp?.initData;
+          if (!initData) {
+            throw new Error('Telegram InitData is missing.');
           }
+
+          // Use the explicit region 'us-central1' as confirmed by the user
+          const functions = getFunctions(undefined, 'us-central1');
+          const tgAuth = httpsCallable<{ initData: string }, { token: string }>(functions, 'telegramAuth');
+
+          const result = await tgAuth({ initData });
+          await signInWithCustomToken(auth, result.data.token);
+          console.log('PollProvider: Telegram authentication successful');
         } catch (err: any) {
           console.error('PollProvider: Telegram auto-login failed:', err);
-          setAuthError(`Telegram Auth Failed: [${err.code}] ${err.message || 'Unknown Error'}`);
+          let message = err.message || 'Unknown Error';
+          if (err.code === 'functions/internal') {
+            message = 'Cloud Function returned an internal error. Check Firebase logs for telegramAuth.';
+          }
+          setAuthError(`Telegram Auth Failed: ${message}`);
         } finally {
           setIsTgSigningIn(false);
           setLoading(false);
         }
       } else {
         if (!auth.currentUser) {
-          setTimeout(() => setLoading(false), 500);
+          setLoading(false);
         }
       }
     };
+
 
     handleTgAuth();
 
@@ -127,10 +143,16 @@ export function PollProvider({ children }: { children: React.ReactNode }) {
   const createPoll = async (pollData: Omit<Poll, 'id' | 'creatorId' | 'creatorName' | 'createdAt' | 'isActive'>) => {
     if (!user) throw new Error('User not authenticated');
 
+    const tgUser = telegramService.getUser();
+    const resolvedName = user.displayName || 
+      (tgUser?.username ? `@${tgUser.username}` : null) ||
+      (tgUser ? [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') : null) ||
+      'Anonymous';
+
     const newPoll: Omit<Poll, 'id'> = {
       ...pollData,
       creatorId: user.uid,
-      creatorName: user.displayName || 'Anonymous',
+      creatorName: resolvedName,
       createdAt: Date.now(),
       isActive: true
     };
@@ -144,18 +166,24 @@ export function PollProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const castVote = async (pollId: string, optionId: string) => {
+  const castVote = async (pollId: string, selections: Vote['selections']) => {
     if (!user) throw new Error('User not authenticated');
 
-    const voteId = user.uid; // One vote per user per poll
+    const voteId = user.uid;
     const voteRef = doc(db, 'polls', pollId, 'votes', voteId);
+
+    const tgUser = telegramService.getUser();
+    const resolvedName = user.displayName || 
+      (tgUser?.username ? `@${tgUser.username}` : null) ||
+      (tgUser ? [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') : null) ||
+      'Anonymous';
 
     const voteData: Vote = {
       id: voteId,
       pollId,
       userId: user.uid,
-      userName: user.displayName || 'Anonymous',
-      optionId,
+      userName: resolvedName,
+      selections,
       timestamp: Date.now()
     };
 
@@ -175,41 +203,49 @@ export function PollProvider({ children }: { children: React.ReactNode }) {
     const votesSnap = await getDocs(votesRef);
     const votes = votesSnap.docs.map(doc => doc.data() as Vote);
 
-    const optionStats: Record<string, { voteCount: number; propertyTotals: Record<string, number> }> = {};
-    const overallPropertyTotals: Record<string, number> = {};
+    const optionStats: PollSummary['optionStats'] = {};
 
     // Initialize stats for each option
+    const overallPropertyTotals: Record<string, number> = {};
+    
     poll.options.forEach(opt => {
+      const propertyTotals: Record<string, number> = {};
+      opt.properties.forEach(p => {
+        propertyTotals[p.label] = 0;
+        overallPropertyTotals[p.label] = 0;
+      });
+
       optionStats[opt.id] = {
         voteCount: 0,
-        propertyTotals: {}
+        propertyTotals
       };
-      poll.customProperties.forEach(prop => {
-        optionStats[opt.id].propertyTotals[prop.name] = 0;
-        overallPropertyTotals[prop.name] = 0;
-      });
     });
 
     // Aggregate votes
     votes.forEach(vote => {
-      const option = poll.options.find(o => o.id === vote.optionId);
-      if (option) {
-        optionStats[option.id].voteCount++;
-        poll.customProperties.forEach(prop => {
-          const val = option.customValues[prop.name] || 0;
-          optionStats[option.id].propertyTotals[prop.name] += val;
-          overallPropertyTotals[prop.name] += val;
-        });
-      }
+      Object.entries(vote.selections || {}).forEach(([optId, values]) => {
+        if (optionStats[optId]) {
+          optionStats[optId].voteCount++;
+          Object.entries(values).forEach(([propLabel, val]) => {
+            if (optionStats[optId].propertyTotals[propLabel] !== undefined) {
+              optionStats[optId].propertyTotals[propLabel] += val;
+              overallPropertyTotals[propLabel] += val;
+            }
+          });
+        }
+      });
     });
 
     return {
       pollId,
       totalVotes: votes.length,
       optionStats,
-      overallPropertyTotals
+      overallPropertyTotals,
+      votes
     };
   };
+
+
 
   return (
     <PollContext.Provider value={{ user, loading, isTgSigningIn, authError, polls, createPoll, castVote, getPollSummary }}>

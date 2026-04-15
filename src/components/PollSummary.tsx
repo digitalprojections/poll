@@ -23,7 +23,7 @@ import {
   Pie
 } from 'recharts';
 import { ArrowLeft, Users, TrendingUp, Info } from 'lucide-react';
-import { formatNumber } from '../lib/utils';
+import { formatNumber, formatDate } from '../lib/utils';
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
@@ -49,18 +49,21 @@ export default function PollSummary() {
 
   const voteData = poll.options.map((opt, idx) => ({
     name: opt.text,
-    votes: summary.optionStats[opt.id]?.voteCount || 0,
+    selections: summary.optionStats[opt.id]?.voteCount || 0,
     color: COLORS[idx % COLORS.length]
   }));
 
+  // Extract distinct property labels from summary totals
+  const metrics = summary.overallPropertyTotals ? Object.keys(summary.overallPropertyTotals) : [];
+
   // Prepare data for custom property charts
-  const propertyCharts = poll.customProperties.map(prop => {
+  const propertyCharts = metrics.map(metricLabel => {
     const data = poll.options.map((opt, idx) => ({
       name: opt.text,
-      value: summary.optionStats[opt.id]?.propertyTotals[prop.name] || 0,
+      value: summary.optionStats[opt.id]?.propertyTotals[metricLabel] || 0,
       color: COLORS[idx % COLORS.length]
     }));
-    return { prop, data };
+    return { label: metricLabel, data };
   });
 
   return (
@@ -69,12 +72,17 @@ export default function PollSummary() {
         <div>
           <span className="status-pill">Analytics Preview (Real-time)</span>
           <h1 className="text-4xl font-serif mt-2">{poll.question}</h1>
-          {poll.description && <p className="text-text-secondary mt-2 max-w-2xl">{poll.description}</p>}
+          <div className="flex gap-2 mt-2">
+            <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 bg-accent/10 text-accent rounded border border-accent/20">
+              {poll.type === 'single-select' ? 'Single Choice' : 'Multi-Select'}
+            </span>
+            {poll.description && <p className="text-text-secondary text-sm">{poll.description}</p>}
+          </div>
         </div>
         <div className="flex items-center gap-4">
           <div className="status-pill flex items-center gap-2">
             <Users className="w-3 h-3" />
-            {summary.totalVotes} Samples
+            {summary.totalVotes} Respondents
           </div>
           <button 
             onClick={() => navigate('/')}
@@ -87,32 +95,31 @@ export default function PollSummary() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {poll.customProperties.map(prop => (
+        {metrics.map(metricLabel => (
           <motion.div 
-            key={prop.name}
+            key={metricLabel}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             className="sophisticated-card !p-6 bg-white/[0.02]"
           >
             <div className="flex items-center justify-between mb-4">
-              <span className="text-[10px] font-medium text-text-secondary uppercase tracking-widest">{prop.label}</span>
+              <span className="text-[10px] font-medium text-text-secondary uppercase tracking-widest">{metricLabel} Total</span>
               <TrendingUp className="w-3 h-3 text-accent" />
             </div>
             <div className="text-4xl font-serif text-text-primary">
-              {formatNumber(summary.overallPropertyTotals[prop.name])}
-              <span className="text-xs font-sans text-text-secondary ml-1 italic">{prop.unit}</span>
+              {formatNumber(summary.overallPropertyTotals[metricLabel] || 0)}
             </div>
-            <p className="text-[10px] text-text-secondary mt-2 uppercase tracking-tighter opacity-50">Aggregate Coefficient</p>
+            <p className="text-[10px] text-text-secondary mt-2 uppercase tracking-tighter opacity-50">Aggregate Selection Impact</p>
           </motion.div>
         ))}
       </div>
 
-      {/* Main Charts */}
+      {/* Charts Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Vote Distribution */}
+        {/* Selection Distribution */}
         <div className="sophisticated-card">
-          <span className="section-label">Sample Distribution</span>
-          <h2 className="text-xl font-serif mb-8">Vote Velocity Analysis</h2>
+          <span className="section-label">Selection Volume</span>
+          <h2 className="text-xl font-serif mb-8">Option Popularity</h2>
           <div className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -123,7 +130,7 @@ export default function PollSummary() {
                   innerRadius={60}
                   outerRadius={100}
                   paddingAngle={8}
-                  dataKey="votes"
+                  dataKey="selections"
                   stroke="none"
                 >
                   {voteData.map((entry, index) => (
@@ -144,42 +151,61 @@ export default function PollSummary() {
                   <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
                   <span className="text-[11px] text-text-secondary truncate">{item.name}</span>
                 </div>
-                <span className="text-xs font-serif text-text-primary ml-2">{item.votes}</span>
+                <span className="text-xs font-serif text-text-primary ml-2">{item.selections}</span>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Custom Property Charts */}
-        {propertyCharts.map(({ prop, data }) => (
-          <div key={prop.name} className="sophisticated-card">
-            <span className="section-label">Metric Performance</span>
-            <h2 className="text-xl font-serif mb-8">{prop.label} Variance</h2>
-            <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={data} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#262626" />
-                  <XAxis type="number" hide />
-                  <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 10, fill: '#A0A0A0' }} />
-                  <Tooltip 
-                    cursor={{ fill: 'rgba(255,255,255,0.05)' }}
-                    contentStyle={{ backgroundColor: '#141414', border: '1px solid #262626', borderRadius: '8px' }}
-                    itemStyle={{ color: '#E5E5E5' }}
-                  />
-                  <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-                    {data.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} fillOpacity={0.6} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-            <p className="text-[10px] text-center mt-6 text-text-secondary uppercase tracking-[0.2em] opacity-40">
-              Impact Coefficient Distribution
-            </p>
+        {/* Voter Manifest - Who voted what */}
+        <div className="sophisticated-card flex flex-col">
+          <span className="section-label">Audit Trail</span>
+          <h2 className="text-xl font-serif mb-8">Voter Manifest</h2>
+          
+          <div className="flex-1 overflow-y-auto max-h-[440px] pr-2 custom-scrollbar space-y-4">
+            {summary.votes.length === 0 ? (
+              <div className="text-center py-12 text-text-secondary text-sm italic">
+                No verified records found in terminal.
+              </div>
+            ) : (
+              summary.votes.map((vote) => (
+                <div key={vote.id} className="p-4 bg-white/5 border border-border rounded-xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-text-primary flex items-center gap-2">
+                       <User size={12} className="text-accent" /> {vote.userName}
+                    </span>
+                    <span className="text-[9px] text-text-secondary uppercase">
+                      {formatDate(vote.timestamp)}
+                    </span>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    {Object.entries(vote.selections).map(([optId, values]) => {
+                      const opt = poll.options.find(o => o.id === optId);
+                      return (
+                        <div key={optId} className="pl-3 border-l-2 border-accent/30 py-1">
+                          <div className="text-[11px] text-text-primary mb-1">{opt?.text}</div>
+                          <div className="flex flex-wrap gap-2">
+                            {Object.entries(values).map(([label, val]) => (
+                               <span key={label} className="text-[9px] px-1.5 py-0.5 bg-bg border border-border text-text-secondary rounded">
+                                 {label}: <span className="text-accent">{val}</span>
+                               </span>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))
+            )}
           </div>
-        ))}
+        </div>
       </div>
     </div>
   );
 }
+
+import { User } from 'lucide-react';
+
+
