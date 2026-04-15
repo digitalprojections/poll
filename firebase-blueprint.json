@@ -1,0 +1,67 @@
+{
+  "entities": {
+    "Poll": {
+      "title": "Poll",
+      "description": "A poll with custom integer properties for detailed summarization.",
+      "type": "object",
+      "properties": {
+        "question": { "type": "string", "description": "The poll question." },
+        "description": { "type": "string", "description": "Optional description." },
+        "creatorId": { "type": "string", "description": "UID of the creator." },
+        "creatorName": { "type": "string", "description": "Display name of the creator." },
+        "createdAt": { "type": "number", "description": "Timestamp of creation." },
+        "isActive": { "type": "boolean", "description": "Whether the poll is open for voting." },
+        "customProperties": {
+          "type": "array",
+          "description": "List of custom integer properties (e.g., Weight, Points)."
+        },
+        "options": {
+          "type": "array",
+          "description": "List of poll options, each with custom integer values."
+        }
+      },
+      "required": ["question", "creatorId", "createdAt", "isActive", "options"]
+    },
+    "Vote": {
+      "title": "Vote",
+      "description": "A vote cast by a user.",
+      "type": "object",
+      "properties": {
+        "pollId": { "type": "string", "description": "ID of the poll." },
+        "userId": { "type": "string", "description": "UID of the voter." },
+        "userName": { "type": "string", "description": "Display name of the voter." },
+        "optionId": { "type": "string", "description": "ID of the selected option." },
+        "timestamp": { "type": "number", "description": "Timestamp of the vote." }
+      },
+      "required": ["pollId", "userId", "optionId", "timestamp"]
+    },
+    "User": {
+      "title": "User",
+      "description": "User profile information.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "telegramId": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["uid", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/polls/{pollId}": {
+      "schema": "Poll",
+      "description": "Collection of all polls."
+    },
+    "/polls/{pollId}/votes/{voteId}": {
+      "schema": "Vote",
+      "description": "Subcollection of votes for a specific poll."
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles."
+    }
+  }
+}

@@ -1,0 +1,51 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-serif: "Georgia", serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  --color-bg: #0A0A0A;
+  --color-surface: #141414;
+  --color-border: #262626;
+  --color-accent: #3897F0;
+  --color-text-primary: #E5E5E5;
+  --color-text-secondary: #A0A0A0;
+}
+
+@layer base {
+  body {
+    @apply bg-bg text-text-primary font-sans antialiased;
+  }
+  
+  h1, h2, h3, .font-serif {
+    @apply font-serif;
+  }
+}
+
+@layer components {
+  .sophisticated-card {
+    @apply bg-surface border border-border rounded-[16px] p-8;
+  }
+
+  .btn-primary {
+    @apply bg-accent text-white px-6 py-3 rounded-lg font-semibold hover:opacity-90 transition-all;
+  }
+
+  .btn-secondary {
+    @apply bg-transparent border border-border text-text-primary px-6 py-3 rounded-lg font-semibold hover:bg-white/5 transition-all;
+  }
+
+  .input-field {
+    @apply w-full px-4 py-3 bg-[#1c1c1c] border border-border rounded-lg text-text-primary focus:border-accent outline-none transition-all;
+  }
+
+  .status-pill {
+    @apply px-3 py-1.5 border border-border rounded-full text-[11px] uppercase tracking-[0.1em] text-text-secondary;
+  }
+
+  .section-label {
+    @apply font-serif italic text-[0.85rem] text-accent mb-4 block;
+  }
+}
