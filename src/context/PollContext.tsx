@@ -31,9 +31,11 @@ interface PollContextType {
   isTgSigningIn: boolean;
   authError: string | null;
   polls: Poll[];
-  createPoll: (pollData: Omit<Poll, 'id' | 'creatorId' | 'creatorName' | 'createdAt' | 'isActive'>) => Promise<string>;
+  createPoll: (pollData: Omit<Poll, 'id' | 'creatorId' | 'creatorName' | 'createdAt' | 'isActive' | 'accessCode' | 'isPrivate'>) => Promise<string>;
+  subscribeToPoll: (pollId: string, accessCode: string) => Promise<void>;
   castVote: (pollId: string, selections: Vote['selections']) => Promise<void>;
   getPollSummary: (pollId: string) => Promise<PollSummary>;
+  deletePoll: (pollId: string) => Promise<void>;
 }
 
 const PollContext = createContext<PollContextType | undefined>(undefined);
@@ -127,20 +129,53 @@ export function PollProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setPolls([]);
+      return;
+    }
 
-    const q = query(collection(db, 'polls'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const pollList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Poll));
-      setPolls(pollList);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'polls');
+    // Get user profile first to get subscribedPollIds
+    const userRef = doc(db, 'users', user.uid);
+    const unsubUser = onSnapshot(userRef, (userDoc) => {
+      const userData = userDoc.data();
+      const subscribedIds = userData?.subscribedPollIds || [];
+
+      // Query: Created by me
+      const qCreated = query(collection(db, 'polls'), where('creatorId', '==', user.uid), orderBy('createdAt', 'desc'));
+      
+      const unsubscribePolls = onSnapshot(qCreated, (snapshot) => {
+        const createdPolls = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Poll));
+        
+        // Fetch subscribed polls manually (since 'in' queries have 10-item limits and we want real-time)
+        // For simplicity and since it's a small app, we'll combine them in the state
+        // In a real app, you'd use a better subscription strategy
+        setPolls(createdPolls);
+        
+        // Fetch additional subscribed polls
+        if (subscribedIds.length > 0) {
+          // Note: In a production app, we'd handle batches of 10 for 'in' keyword
+          const qSubscribed = query(collection(db, 'polls'), where('__name__', 'in', subscribedIds.slice(0, 10)));
+          getDocs(qSubscribed).then(subSnap => {
+            const subPolls = subSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Poll));
+            setPolls(prev => {
+              const combined = [...prev, ...subPolls];
+              // De-duplicate
+              return Array.from(new Map(combined.map(p => [p.id, p])).values())
+                .sort((a, b) => b.createdAt - a.createdAt);
+            });
+          });
+        }
+      }, (error) => {
+        handleFirestoreError(error, OperationType.LIST, 'polls');
+      });
+
+      return () => unsubscribePolls();
     });
 
-    return () => unsubscribe();
+    return () => unsubUser();
   }, [user]);
 
-  const createPoll = async (pollData: Omit<Poll, 'id' | 'creatorId' | 'creatorName' | 'createdAt' | 'isActive'>) => {
+  const createPoll = async (pollData: any) => {
     if (!user) throw new Error('User not authenticated');
 
     const tgUser = telegramService.getUser();
@@ -149,12 +184,17 @@ export function PollProvider({ children }: { children: React.ReactNode }) {
       (tgUser ? [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') : null) ||
       'Anonymous';
 
+    // Generate a unique access code (short hash)
+    const accessCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+
     const newPoll: Omit<Poll, 'id'> = {
       ...pollData,
       creatorId: user.uid,
       creatorName: resolvedName,
       createdAt: Date.now(),
-      isActive: true
+      isActive: true,
+      isPrivate: true, // All polls are private now
+      accessCode
     };
 
     try {
@@ -162,6 +202,27 @@ export function PollProvider({ children }: { children: React.ReactNode }) {
       return docRef.id;
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'polls');
+      throw error;
+    }
+  };
+
+  const subscribeToPoll = async (pollId: string, accessCode: string) => {
+    if (!user) throw new Error('User not authenticated');
+
+    const pollRef = doc(db, 'polls', pollId);
+    const pollSnap = await getDocs(query(collection(db, 'polls'), where('accessCode', '==', accessCode)));
+    
+    if (pollSnap.empty) throw new Error('Invalid access code');
+    
+    const userRef = doc(db, 'users', user.uid);
+    try {
+      // Use arrayUnion to safely add pollId to subscribedPollIds
+      const { arrayUnion, updateDoc } = await import('firebase/firestore');
+      await updateDoc(userRef, {
+        subscribedPollIds: arrayUnion(pollId)
+      });
+    } catch (error) {
+      console.error('Failed to subscribe:', error);
       throw error;
     }
   };
@@ -245,10 +306,29 @@ export function PollProvider({ children }: { children: React.ReactNode }) {
     };
   };
 
+  const deletePoll = async (pollId: string) => {
+    if (!user) throw new Error('User not authenticated');
+
+    const pollRef = doc(db, 'polls', pollId);
+    const votesRef = collection(db, 'polls', pollId, 'votes');
+    const votesSnap = await getDocs(votesRef);
+
+    if (!votesSnap.empty) {
+      throw new Error('Cannot delete a poll that has already received votes.');
+    }
+
+    try {
+      const { deleteDoc } = await import('firebase/firestore');
+      await deleteDoc(pollRef);
+    } catch (error) {
+       handleFirestoreError(error, OperationType.DELETE, `polls/${pollId}`);
+       throw error;
+    }
+  };
 
 
   return (
-    <PollContext.Provider value={{ user, loading, isTgSigningIn, authError, polls, createPoll, castVote, getPollSummary }}>
+    <PollContext.Provider value={{ user, loading, isTgSigningIn, authError, polls, createPoll, subscribeToPoll, castVote, getPollSummary, deletePoll }}>
       {children}
     </PollContext.Provider>
   );

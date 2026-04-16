@@ -36,9 +36,22 @@ export interface Poll {
   creatorId: string;
   creatorName: string;
   createdAt: number;
+  expiresAt: number; // Final deletion/archive timestamp
+  closedAt: number; // Voting deadline timestamp
+  isPrivate: boolean; // Default should be true
+  accessCode: string; // Unique hash for sharing
   options: PollOption[];
   isActive: boolean;
   customProperties?: { label: string; unit?: string; name: string }[];
+}
+
+export interface UserProfile {
+  uid: string;
+  displayName: string | null;
+  photoURL: string | null;
+  telegramId: string | null;
+  subscribedPollIds: string[]; // Track joined private polls
+  updatedAt: number;
 }
 
 export interface Vote {

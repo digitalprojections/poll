@@ -6,12 +6,12 @@
  */
 
 import React, { useState } from 'react';
-import { Plus, Trash2, Settings2, ListPlus } from 'lucide-react';
+import { Plus, Trash2, ShieldCheck, Clock, Calendar as CalendarIcon } from 'lucide-react';
 import { usePolls } from '../context/PollContext';
-import { CustomProperty, PollOption } from '../types/poll';
-import { motion, AnimatePresence } from 'motion/react';
+import { PollOption, Poll } from '../types/poll';
+import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
-import { cn } from '../lib/utils';
+import { cn, formatDate } from '../lib/utils';
 
 export default function PollCreate() {
   const { createPoll } = usePolls();
@@ -23,6 +23,10 @@ export default function PollCreate() {
     { id: '1', text: '', properties: [{ label: 'Weight', value: 0, unit: 'kg' }] },
     { id: '2', text: '', properties: [{ label: 'Weight', value: 0, unit: 'kg' }] }
   ]);
+  const [lifespanDays, setLifespanDays] = useState(7);
+  const [closingDays, setClosingDays] = useState(3);
+  const expiresAt = Date.now() + (lifespanDays * 24 * 60 * 60 * 1000);
+  const closedAt = Date.now() + (closingDays * 24 * 60 * 60 * 1000);
 
   const addOption = () => {
     const id = Date.now().toString();
@@ -58,7 +62,10 @@ export default function PollCreate() {
         question,
         description,
         type,
-        options
+        options,
+        expiresAt,
+        closedAt,
+        isPrivate: true
       });
       navigate('/');
     } catch (error) {
@@ -67,10 +74,10 @@ export default function PollCreate() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto">
+    <div className="w-full px-0 sm:px-0">
       <div className="mb-12">
-        <span className="status-pill">Assessment Architect</span>
-        <h1 className="text-4xl font-serif mt-2">Draft New Evaluation</h1>
+        <span className="status-pill">Poll Architect</span>
+        <h1 className="text-3xl md:text-4xl font-serif mt-2">Draft New Poll</h1>
       </div>
 
       <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -81,7 +88,7 @@ export default function PollCreate() {
           className="sophisticated-card space-y-8"
         >
           <span className="section-label">Core Protocol</span>
-          
+
           <div className="space-y-6">
             <div className="field-group">
               <label className="block text-[11px] uppercase tracking-wider text-text-secondary mb-2">Evaluation Title</label>
@@ -128,6 +135,78 @@ export default function PollCreate() {
                 className="input-field h-32 resize-none"
               />
             </div>
+
+            <div className="field-group border-t border-white/5 pt-8 space-y-8">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between mb-4">
+                  <label className="block text-[11px] uppercase tracking-wider text-text-secondary">Voting Deadline</label>
+                  <span className="flex items-center gap-1.5 text-[10px] font-bold text-accent px-2 py-0.5 bg-accent/10 rounded">
+                    <ShieldCheck className="w-3 h-3" /> Secure protocol
+                  </span>
+                </div>
+                <div className="flex items-center gap-4">
+                  <input
+                    type="range"
+                    min="1"
+                    max={lifespanDays}
+                    value={closingDays}
+                    onChange={(e) => setClosingDays(parseInt(e.target.value))}
+                    className="flex-1 accent-accent"
+                  />
+                  <span className="text-xl font-serif text-text-primary w-16 text-right">{closingDays} <span className="text-xs font-sans text-text-secondary">Days</span></span>
+                </div>
+                <div className="p-4 bg-white/5 rounded-xl border border-border flex items-center justify-between group">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-accent/10 flex items-center justify-center">
+                      <Clock className="w-5 h-5 text-accent" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest text-text-secondary opacity-50">Voting Closes</p>
+                      <p className="text-sm font-medium text-text-primary">{formatDate(closedAt)}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4 border-t border-white/5 pt-8">
+                <div className="flex items-center justify-between">
+                  <label className="block text-[11px] uppercase tracking-wider text-text-secondary">Archival Lifespan</label>
+                </div>
+                <div className="flex items-center gap-4">
+                  <input
+                    type="range"
+                    min="1"
+                    max="90"
+                    value={lifespanDays}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value);
+                      setLifespanDays(val);
+                      if (closingDays > val) setClosingDays(val);
+                    }}
+                    className="flex-1 accent-text-secondary"
+                  />
+                  <span className="text-xl font-serif text-text-primary w-16 text-right">{lifespanDays} <span className="text-xs font-sans text-text-secondary">Days</span></span>
+                </div>
+
+                <div className="p-4 bg-white/5 rounded-xl border border-border flex items-center justify-between group">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center border border-border">
+                      <CalendarIcon className="w-5 h-5 text-text-secondary" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest text-text-secondary opacity-50">Archive Date</p>
+                      <p className="text-sm font-medium text-text-secondary">{formatDate(expiresAt)}</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <div className="h-1.5 w-24 bg-border/30 rounded-full overflow-hidden">
+                      <div className="h-full bg-accent w-full" />
+                    </div>
+                    <span className="text-[9px] font-bold text-accent uppercase tracking-tighter">Fixed Protocol</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </motion.div>
 
@@ -150,7 +229,7 @@ export default function PollCreate() {
 
           <div className="space-y-6 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
             {options.map((opt, optIdx) => (
-              <div key={opt.id} className="p-6 bg-white/5 border border-border rounded-xl space-y-5 group/card transition-all hover:bg-white/[0.07]">
+              <div key={opt.id} className="p-4 md:p-6 bg-white/5 border border-border rounded-xl space-y-5 group/card transition-all hover:bg-white/[0.07]">
                 <div className="flex items-center gap-3">
                   <input
                     type="text"
@@ -167,12 +246,12 @@ export default function PollCreate() {
                     type="button"
                     onClick={() => removeOption(opt.id)}
                     disabled={options.length <= 2}
-                    className="text-text-secondary hover:text-red-500 disabled:opacity-30"
+                    className="p-2 text-text-secondary hover:text-red-500 disabled:opacity-30 flex-shrink-0"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
-                
+
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-[9px] uppercase tracking-widest text-text-secondary opacity-50">Local Metrics</span>
@@ -184,10 +263,10 @@ export default function PollCreate() {
                       + Add Target
                     </button>
                   </div>
-                  
-                  <div className="grid grid-cols-1 gap-2">
+
+                  <div className="grid grid-cols-1 gap-2 overflow-hidden">
                     {opt.properties.map((prop, propIdx) => (
-                      <div key={propIdx} className="flex items-center gap-2 p-2 bg-bg rounded border border-border/50">
+                      <div key={propIdx} className="flex items-center gap-1.5 p-2 bg-bg rounded border border-border/50 max-w-full">
                         <input
                           type="text"
                           value={prop.label}
@@ -196,7 +275,7 @@ export default function PollCreate() {
                             newOpts[optIdx].properties[propIdx].label = e.target.value;
                             setOptions(newOpts);
                           }}
-                          className="flex-1 bg-transparent border-none text-[10px] text-text-primary focus:ring-0 p-0"
+                          className="flex-1 min-w-0 bg-transparent border-none text-[10px] text-text-primary focus:ring-0 p-0"
                           placeholder="Label"
                         />
                         <input
@@ -207,7 +286,7 @@ export default function PollCreate() {
                             newOpts[optIdx].properties[propIdx].value = parseInt(e.target.value) || 0;
                             setOptions(newOpts);
                           }}
-                          className="w-16 bg-transparent border-none text-[10px] text-accent text-right focus:ring-0 p-0"
+                          className="w-8 bg-transparent border-none text-[10px] text-accent text-right focus:ring-0 p-0"
                         />
                         <input
                           type="text"
@@ -217,15 +296,15 @@ export default function PollCreate() {
                             newOpts[optIdx].properties[propIdx].unit = e.target.value;
                             setOptions(newOpts);
                           }}
-                          className="w-10 bg-transparent border-none text-[9px] text-text-secondary focus:ring-0 p-0"
+                          className="w-4 bg-transparent border-none text-[9px] text-text-secondary focus:ring-0 p-0"
                           placeholder="U"
                         />
                         <button
                           type="button"
                           onClick={() => removeProperty(optIdx, propIdx)}
-                          className="text-text-secondary hover:text-red-500"
+                          className="p-1.5 text-text-secondary hover:text-red-500 flex-shrink-0"
                         >
-                          <Trash2 className="w-3 h-3" />
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     ))}

@@ -1,18 +1,42 @@
-rules_version='2'
+rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      // This rule allows anyone with your database reference to view, edit,
-      // and delete all data in your database. It is useful for getting
-      // started, but it is configured to expire after 30 days because it
-      // leaves your app open to attackers. At that time, all client
-      // requests to your database will be denied.
-      //
-      // Make sure to write security rules for your app before that time, or
-      // else all client requests to your database will be denied until you
-      // update your rules.
-      allow read, write: if request.time < timestamp.date(2026, 5, 15);
+    
+    // User Profile Rules
+    match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Poll Rules
+    match /polls/{pollId} {
+      // Allow read if:
+      // 1. User is the creator
+      // 2. User has subscribed (checked via cross-document reference to their user profile)
+      allow read: if request.auth != null && (
+        resource.data.creatorId == request.auth.uid ||
+        pollId in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subscribedPollIds
+      );
+      
+      // Allow create if authenticated
+      allow create: if request.auth != null;
+      
+      // Allow update for creator
+      allow update: if request.auth != null && resource.data.creatorId == request.auth.uid;
+
+      // Votes Sub-collection
+      match /votes/{voteId} {
+        // Authenticated users can read votes if they can read the parent poll
+        allow read: if request.auth != null && (
+          get(/databases/$(database)/documents/polls/$(pollId)).data.creatorId == request.auth.uid ||
+          pollId in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subscribedPollIds
+        );
+        
+        // Users can write their own vote if it's before voting closure
+        allow write: if request.auth != null && request.auth.uid == voteId && 
+          request.time.toMillis() < get(/databases/$(database)/documents/polls/$(pollId)).data.closedAt;
+      }
     }
   }
 }

@@ -26,7 +26,7 @@
 
 @layer components {
   .sophisticated-card {
-    @apply bg-surface border border-border rounded-[16px] p-8;
+    @apply bg-surface border border-border rounded-[16px] p-6 md:p-8;
   }
 
   .btn-primary {
@@ -37,8 +37,12 @@
     @apply bg-transparent border border-border text-text-primary px-6 py-3 rounded-lg font-semibold hover:bg-white/5 transition-all;
   }
 
+  .btn-square {
+    @apply flex items-center justify-center bg-transparent border border-border text-text-primary rounded-lg hover:bg-white/5 transition-all aspect-square;
+  }
+
   .input-field {
-    @apply w-full px-4 py-3 bg-[#1c1c1c] border border-border rounded-lg text-text-primary focus:border-accent outline-none transition-all;
+    @apply w-full px-4 py-3 bg-[#1c1c1c] border border-border rounded-lg text-text-primary focus:border-accent focus:ring-1 focus:ring-accent outline-none transition-all;
   }
 
   .status-pill {

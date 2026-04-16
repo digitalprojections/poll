@@ -18,9 +18,13 @@ export const telegramAuth = onCall({
   cors: true,
   region: 'us-central1'
 }, async (request) => {
-  const botToken = "8353777316:AAFkXCNOcpiBjCj6E_VpvpDEe1R-7alKRMI";
+  // Use environment variables for the bot token
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
   
-  try {
+  if (!botToken) {
+    console.error('TELEGRAM_BOT_TOKEN is not defined in environment variables');
+    throw new HttpsError('internal', 'Server configuration error.');
+  }
     const data = request.data as { initData: string };
 
     if (!data || !data.initData) {
@@ -110,3 +114,32 @@ export const telegramAuth = onCall({
   }
 });
 
+
+/**
+ * Triggered when a poll is deleted to clean up references in user profiles.
+ */
+export const onPollDeleted = functions.firestore
+  .document('polls/{pollId}')
+  .onDelete(async (snap, context) => {
+    const pollId = context.params.pollId;
+    console.log(`onPollDeleted: Cleaning up references for poll ${pollId}`);
+
+    const usersSnap = await db.collection('users')
+      .where('subscribedPollIds', 'array-contains', pollId)
+      .get();
+
+    if (usersSnap.empty) {
+      console.log('onPollDeleted: No subscribers found to clean up.');
+      return;
+    }
+
+    const batch = db.batch();
+    usersSnap.forEach(userDoc => {
+      batch.update(userDoc.ref, {
+        subscribedPollIds: admin.firestore.FieldValue.arrayRemove(pollId)
+      });
+    });
+
+    await batch.commit();
+    console.log(`onPollDeleted: Cleaned up ${usersSnap.size} user references.`);
+  });

@@ -68,25 +68,25 @@ export default function PollSummary() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-12">
-      <div className="flex items-end justify-between">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div>
           <span className="status-pill">Analytics Preview (Real-time)</span>
-          <h1 className="text-4xl font-serif mt-2">{poll.question}</h1>
-          <div className="flex gap-2 mt-2">
-            <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 bg-accent/10 text-accent rounded border border-accent/20">
+          <h1 className="text-3xl md:text-4xl font-serif mt-2 line-clamp-2">{poll.question}</h1>
+          <div className="flex flex-wrap gap-2 mt-3">
+            <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 bg-accent/10 text-accent rounded border border-accent/20 h-fit">
               {poll.type === 'single-select' ? 'Single Choice' : 'Multi-Select'}
             </span>
-            {poll.description && <p className="text-text-secondary text-sm">{poll.description}</p>}
+            {poll.description && <p className="text-text-secondary text-sm md:line-clamp-none">{poll.description}</p>}
           </div>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center justify-between md:justify-end gap-4 border-t border-white/5 pt-4 md:border-none md:pt-0">
           <div className="status-pill flex items-center gap-2">
             <Users className="w-3 h-3" />
             {summary.totalVotes} Respondents
           </div>
           <button 
             onClick={() => navigate('/')}
-            className="btn-secondary py-2 px-4 text-xs"
+            className="btn-secondary py-2.5 px-6 text-xs whitespace-nowrap"
           >
             Close Report
           </button>

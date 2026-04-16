@@ -13,6 +13,7 @@ import PollList from './components/PollList';
 import PollCreate from './components/PollCreate';
 import PollVote from './components/PollVote';
 import PollSummary from './components/PollSummary';
+import PollSubscribe from './components/PollSubscribe';
 import { telegramService } from './services/telegramService';
 import { LogOut, User, BarChart3, Plus } from 'lucide-react';
 import { auth } from './firebase';
@@ -112,7 +113,7 @@ function AppContent() {
         </div>
         <div className="text-center">
           <p className="text-text-primary font-serif italic text-lg mb-1">
-            {isTgSigningIn ? 'Authenticating with Telegram...' : 'Loading Architect...'}
+            {isTgSigningIn ? 'Authenticating with Telegram...' : 'Loading Poll Architect...'}
           </p>
           <p className="text-text-secondary text-[10px] uppercase tracking-widest">
             {isTgSigningIn ? 'Verifying Identity' : 'Initializing Suite'}
@@ -131,7 +132,7 @@ function AppContent() {
 
       {/* Main content — edge-to-edge on mobile */}
       <main className={cn(
-        "flex-1 w-full px-4 py-6 md:p-12",
+        "flex-1 w-full px-1 py-6 md:p-12",
         user ? "md:ml-[260px] pb-24 md:pb-12" : ""
       )}>
         <Routes>
@@ -140,12 +141,13 @@ function AppContent() {
           <Route path="/create" element={user ? <PollCreate /> : <Navigate to="/login" />} />
           <Route path="/vote/:pollId" element={user ? <PollVote /> : <Navigate to="/login" />} />
           <Route path="/summary/:pollId" element={user ? <PollSummary /> : <Navigate to="/login" />} />
+          <Route path="/subscribe/:pollId" element={<PollSubscribe />} />
         </Routes>
 
         {/* Footer Credits */}
         <footer className="mt-12 pt-8 border-t border-border text-text-secondary text-[11px] uppercase tracking-wider flex flex-col md:flex-row gap-2 md:gap-0 justify-between items-center">
           <p>Built by @ahmadfuzal • {new Date().toLocaleDateString()}</p>
-          <p>Telegram Mini App Integration Enabled</p>
+          <p>Active Telegram Links</p>
         </footer>
       </main>
 

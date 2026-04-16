@@ -9,8 +9,8 @@ import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { usePolls } from '../context/PollContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { CheckCircle2, ArrowLeft, Info } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { CheckCircle2, ArrowLeft, Info, Clock, AlertTriangle, ShieldX } from 'lucide-react';
+import { cn, formatDate } from '../lib/utils';
 
 export default function PollVote() {
   const { pollId } = useParams();
@@ -21,6 +21,15 @@ export default function PollVote() {
   const [initialLoading, setInitialLoading] = useState(true);
 
   const poll = polls.find(p => p.id === pollId);
+
+  const isExpired = poll ? Date.now() > poll.closedAt : false;
+  const timeRemaining = poll ? poll.closedAt - Date.now() : 0;
+  const totalDuration = poll ? poll.closedAt - poll.createdAt : 1;
+  const percentLeft = Math.max(0, Math.min(100, (timeRemaining / totalDuration) * 100));
+
+  // Visual Gauge Colors
+  const gaugeColor = percentLeft > 50 ? 'bg-green-500' : percentLeft > 20 ? 'bg-yellow-500' : 'bg-red-500';
+  const gaugeText = percentLeft > 50 ? 'text-green-500' : percentLeft > 20 ? 'text-yellow-500' : 'text-red-500';
 
   React.useEffect(() => {
     if (pollId && user) {
@@ -37,8 +46,15 @@ export default function PollVote() {
     }
   }, [pollId, user, getPollSummary]);
 
-  if (initialLoading) return <div className="text-center p-12 text-text-secondary">Retrieving existing assessment...</div>;
-  if (!poll) return <div className="text-center p-12">Poll not found</div>;
+  if (initialLoading) return <div className="text-center p-12 text-text-secondary">Retrieving existing poll...</div>;
+  if (!poll) return (
+    <div className="max-w-md mx-auto mt-20 sophisticated-card text-center space-y-6">
+      <ShieldX className="w-12 h-12 text-red-500 mx-auto" />
+      <h2 className="text-2xl font-serif">Poll Unavailable</h2>
+      <p className="text-text-secondary text-sm">This poll has been removed by the creator or the link is invalid.</p>
+      <button onClick={() => navigate('/')} className="btn-primary w-full">Return to Dashboard</button>
+    </div>
+  );
 
   const toggleOption = (optionId: string) => {
     setSelections(prev => {
@@ -94,10 +110,36 @@ export default function PollVote() {
           onClick={() => navigate('/')}
           className="flex items-center gap-2 text-text-secondary hover:text-text-primary transition-colors mb-8 text-[11px] uppercase tracking-wider"
         >
-          <ArrowLeft className="w-4 h-4" /> Return to Archives
+          <ArrowLeft className="w-4 h-4" /> Return to Dashboard
         </button>
 
-        <span className="section-label">{poll.type === 'single-select' ? 'Single Choice Assessment' : 'Multi-Select Assessment'}</span>
+        <span className="section-label">{poll.type === 'single-select' ? 'Single Choice Poll' : 'Multi-Select Poll'}</span>
+
+        {/* Timeframe Gauge */}
+        <div className="mt-4 mb-8 p-4 bg-white/5 rounded-2xl border border-border overflow-hidden relative group">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Clock className={cn("w-4 h-4", gaugeText)} />
+              <span className="text-[10px] uppercase tracking-widest font-bold text-text-secondary">Voting Lifespan</span>
+            </div>
+            <span className={cn("text-xs font-serif", gaugeText)}>{isExpired ? 'EXPIRED' : formatDate(poll.closedAt)}</span>
+          </div>
+          <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${percentLeft}%` }}
+              className={cn("h-full transition-colors duration-1000", gaugeColor)}
+            />
+          </div>
+          {isExpired && (
+            <div className="absolute inset-0 bg-red-950/20 backdrop-blur-[1px] flex items-center justify-center">
+              <span className="flex items-center gap-2 text-red-500 font-bold text-xs uppercase tracking-tighter">
+                <AlertTriangle className="w-4 h-4" /> Voting Period Ended
+              </span>
+            </div>
+          )}
+        </div>
+
         <h1 className="text-3xl font-serif text-text-primary mb-2">{poll.question}</h1>
         {poll.description && <p className="text-text-secondary mb-8 text-sm leading-relaxed">{poll.description}</p>}
 
@@ -184,10 +226,10 @@ export default function PollVote() {
           </button>
           <button
             onClick={handleVote}
-            disabled={Object.keys(selections).length === 0 || isSubmitting}
+            disabled={Object.keys(selections).length === 0 || isSubmitting || isExpired}
             className="flex-1 btn-primary disabled:opacity-50"
           >
-            {isSubmitting ? 'Processing...' : 'Submit Assessment'}
+            {isExpired ? 'Poll Closed' : isSubmitting ? 'Processing...' : 'Submit My Vote'}
           </button>
         </div>
 
