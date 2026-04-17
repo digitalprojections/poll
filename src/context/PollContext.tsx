@@ -209,21 +209,14 @@ export function PollProvider({ children }: { children: React.ReactNode }) {
   const subscribeToPoll = async (pollId: string, accessCode: string) => {
     if (!user) throw new Error('User not authenticated');
 
-    const pollRef = doc(db, 'polls', pollId);
-    const pollSnap = await getDocs(query(collection(db, 'polls'), where('accessCode', '==', accessCode)));
-    
-    if (pollSnap.empty) throw new Error('Invalid access code');
-    
-    const userRef = doc(db, 'users', user.uid);
     try {
-      // Use arrayUnion to safely add pollId to subscribedPollIds
-      const { arrayUnion, updateDoc } = await import('firebase/firestore');
-      await updateDoc(userRef, {
-        subscribedPollIds: arrayUnion(pollId)
-      });
-    } catch (error) {
+      const functions = getFunctions(undefined, 'us-central1');
+      const joinFunc = httpsCallable<{ pollId: string; accessCode: string }, { success: boolean }>(functions, 'joinPoll');
+      
+      await joinFunc({ pollId, accessCode });
+    } catch (error: any) {
       console.error('Failed to subscribe:', error);
-      throw error;
+      throw new Error(error.message || 'Failed to authorize access to this poll.');
     }
   };
 

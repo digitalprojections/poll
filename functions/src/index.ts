@@ -25,6 +25,8 @@ export const telegramAuth = onCall({
     console.error('TELEGRAM_BOT_TOKEN is not defined in environment variables');
     throw new HttpsError('internal', 'Server configuration error.');
   }
+
+  try {
     const data = request.data as { initData: string };
 
     if (!data || !data.initData) {
@@ -143,3 +145,41 @@ export const onPollDeleted = functions.firestore
     await batch.commit();
     console.log(`onPollDeleted: Cleaned up ${usersSnap.size} user references.`);
   });
+
+/**
+ * Securely joins a poll by validating the access code.
+ */
+export const joinPoll = onCall({
+  cors: true,
+  region: 'us-central1'
+}, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated.');
+  }
+
+  const { pollId, accessCode } = request.data as { pollId: string; accessCode: string };
+
+  if (!pollId || !accessCode) {
+    throw new HttpsError('invalid-argument', 'Poll ID and Access Code are required.');
+  }
+
+  const pollRef = db.collection('polls').doc(pollId);
+  const pollDoc = await pollRef.get();
+
+  if (!pollDoc.exists) {
+    throw new HttpsError('not-found', 'Poll not found.');
+  }
+
+  const pollData = pollDoc.data();
+  if (pollData?.accessCode !== accessCode) {
+    throw new HttpsError('permission-denied', 'Invalid access code.');
+  }
+
+  const userRef = db.collection('users').doc(request.auth.uid);
+  
+  await userRef.update({
+    subscribedPollIds: admin.firestore.FieldValue.arrayUnion(pollId)
+  });
+
+  return { success: true };
+});
